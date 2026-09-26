@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { loadRecommendations, reasonLines, type ProductFacts, type RecEvent } from '~/utils/recommend'
+import { loadRecommendations, reasonLines, reasonSentence, type ProductFacts, type RecEvent } from '~/utils/recommend'
 import { copyText, threadsIntentUrl, xIntentUrl } from '~/utils/clipboard'
 import { xWeightedLength } from '~/utils/postTemplates'
 
@@ -27,6 +27,12 @@ const selectedIndex = ref(0)
 const generating = ref(false)
 const generateError = ref('')
 const aiReason = ref('')
+const angle = ref('')
+const angleLabel = ref('')
+// この商品で作り直しに使った切り口（次は別の切り口で作る）
+const triedAngles = ref<string[]>([])
+// この商品で作った案（次は同じ言い回しを避ける）
+const triedPostIds = ref<string[]>([])
 const drafts = ref<Draft[]>([])
 
 const selected = computed(() => candidates.value[selectedIndex.value] ?? null)
@@ -70,6 +76,10 @@ const choose = (index: number) => {
   selectedIndex.value = index
   drafts.value = []
   aiReason.value = ''
+  angle.value = ''
+  angleLabel.value = ''
+  triedAngles.value = []
+  triedPostIds.value = []
   generateError.value = ''
 }
 
@@ -80,7 +90,11 @@ const generate = async () => {
 
   try {
     const { data, error } = await $supabase.functions.invoke('generate-recommended-post', {
-      body: { product_id: selected.value.product.id }
+      body: {
+        product_id: selected.value.product.id,
+        exclude_angles: triedAngles.value,
+        avoid_post_ids: triedPostIds.value.slice(-4)
+      }
     })
 
     if (error) {
@@ -95,6 +109,15 @@ const generate = async () => {
     }
 
     aiReason.value = data.reason ?? ''
+    angle.value = data.content_angle ?? ''
+    angleLabel.value = data.angle_label ?? ''
+    triedPostIds.value = [
+      ...triedPostIds.value,
+      ...(data.posts ?? []).map((p: any) => p.id)
+    ]
+    if (angle.value && !triedAngles.value.includes(angle.value)) {
+      triedAngles.value = [...triedAngles.value, angle.value]
+    }
     const order: Platform[] = ['x', 'threads']
     drafts.value = (data.posts ?? [])
       .map((p: any) => ({
@@ -169,10 +192,8 @@ const copyDraft = async (d: Draft) => {
         <h1>{{ selected.product.name }}を<br>紹介してみませんか？</h1>
 
         <div class="reasons">
-          <p class="reasons-title">理由</p>
-          <ul>
-            <li v-for="line in reasonLines(selected, nextEvent)" :key="line">{{ line }}</li>
-          </ul>
+          <p class="reasons-title">natty noteがおすすめした理由</p>
+          <p class="reasons-text">{{ reasonSentence(selected) }}</p>
         </div>
 
         <button
@@ -182,13 +203,16 @@ const copyDraft = async (d: Draft) => {
           :disabled="generating"
           @click="generate"
         >
-          {{ generating ? '文章を考えています...' : 'おまかせで作る' }}
+          {{ generating ? '宣伝のしかたを考えています...' : 'おまかせで作る' }}
         </button>
 
         <p v-if="generateError" class="error" role="alert">{{ generateError }}</p>
 
         <template v-if="drafts.length">
-          <p v-if="aiReason" class="ai-reason">💡 {{ aiReason }}</p>
+          <div class="strategy">
+            <p v-if="angleLabel" class="angle">今回の切り口：<strong>{{ angleLabel }}</strong></p>
+            <p v-if="aiReason" class="ai-reason">💡 {{ aiReason }}</p>
+          </div>
 
           <article v-for="d in drafts" :key="d.id" class="draft">
             <header class="draft-head">
@@ -239,7 +263,7 @@ const copyDraft = async (d: Draft) => {
             :disabled="generating"
             @click="generate"
           >
-            {{ generating ? '文章を考えています...' : '作り直す' }}
+            {{ generating ? '文章を考えています...' : '別の切り口で作り直す' }}
           </button>
         </template>
 
@@ -324,6 +348,11 @@ h1 {
   opacity: .65;
 }
 
+.reasons-text {
+  margin: 0;
+  line-height: 1.8;
+}
+
 .reasons ul {
   margin: 0;
   padding-left: 20px;
@@ -369,8 +398,26 @@ button:focus-visible,
   outline-offset: 2px;
 }
 
+.strategy {
+  margin-top: 24px;
+}
+
+.angle {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.angle strong {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #e3efe7;
+  color: #31694f;
+}
+
 .ai-reason {
-  margin: 24px 0 0;
+  margin: 0;
   padding: 12px 14px;
   border-radius: 12px;
   background: #fff7e3;

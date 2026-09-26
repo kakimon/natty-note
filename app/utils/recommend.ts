@@ -9,7 +9,7 @@ import {
   type RecResult
 } from '~~/supabase/functions/_shared/recommend-core'
 
-export { reasonLines } from '~~/supabase/functions/_shared/recommend-core'
+export { reasonLines, reasonSentence } from '~~/supabase/functions/_shared/recommend-core'
 export type { ProductFacts, RecEvent, RecResult } from '~~/supabase/functions/_shared/recommend-core'
 
 export const loadRecommendations = async (

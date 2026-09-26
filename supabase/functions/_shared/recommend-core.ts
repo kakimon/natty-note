@@ -205,7 +205,7 @@ export const reasonLines = (f: ProductFacts, nextEvent: RecEvent | null) => {
     lines.push(`最近よく売れています（直近${f.recentEventCount}回中${f.soldOutCount}回完売）`)
   }
   if (f.reasons.includes('in_next_event') && nextEvent) {
-    lines.push(`次回の${nextEvent.name}で販売予定です`)
+    lines.push('次回の出店で販売予定です')
   }
   if (f.reasons.includes('new_product')) {
     lines.push('新しく登録した商品です')
@@ -216,4 +216,147 @@ export const reasonLines = (f: ProductFacts, nextEvent: RecEvent | null) => {
     lines.push(`しばらくSNSで紹介していません（${f.lastIntroDaysAgo}日前）`)
   }
   return lines
+}
+
+// 画面用: natty noteがこの商品をおすすめした理由（1文）
+// 例: 「次回の出店で販売する予定で、まだSNSで紹介していない商品なので、今回おすすめしました。」
+export const reasonSentence = (f: ProductFacts) => {
+  const parts: string[] = []
+  if (f.reasons.includes('sold_out_often')) parts.push('最近のイベントでよく完売していて')
+  if (f.reasons.includes('in_next_event')) parts.push('次回の出店で販売する予定で')
+  if (f.reasons.includes('new_product')) parts.push('新しく登録した商品で')
+  if (f.reasons.includes('never_posted')) parts.push('まだSNSで紹介していない')
+  else if (f.lastIntroDaysAgo !== null) parts.push(`${f.lastIntroDaysAgo}日間SNSで紹介していない`)
+  return `${parts.join('、')}商品なので、今回おすすめしました。`
+}
+
+// ============================================================
+// 投稿の切り口（content_angle）
+// 「何を宣伝するか」の次に「どう伝えるか」を決めるための候補。
+// どの切り口を使ってよいかはプログラムで決め、AIはその中から選ぶ。
+// ============================================================
+
+export const CONTENT_ANGLES = [
+  'product_feature',
+  'rice_flour_story',
+  'ingredient_story',
+  'popular_item',
+  'seasonal',
+  'customer_scene',
+  'behind_the_scenes',
+  'brand_story',
+  'event_notice',
+  'event_thanks'
+] as const
+
+export type ContentAngle = typeof CONTENT_ANGLES[number]
+
+export const ANGLE_LABELS: Record<ContentAngle, string> = {
+  product_feature: '商品の魅力',
+  rice_flour_story: '米粉ならではの良さ',
+  ingredient_story: '素材の話',
+  popular_item: '人気の商品',
+  seasonal: '季節の楽しみ方',
+  customer_scene: 'おやつ時間のシーン',
+  behind_the_scenes: 'ものづくりの裏側',
+  brand_story: 'nattyのこと',
+  event_notice: '出店のおしらせ',
+  event_thanks: '出店のお礼'
+}
+
+// AIに渡す各切り口の説明
+export const ANGLE_GUIDES: Record<ContentAngle, string> = {
+  product_feature: '商品名・説明文から分かる範囲で、商品の魅力（味の組み合わせなど）を伝える',
+  rice_flour_story: '小麦粉ではなく自家栽培米の米粉で作っていることを伝える（食感などは説明文にある範囲で）',
+  ingredient_story: 'プロフィールにある素材（自家栽培の風さやか、平飼い卵）の話をする',
+  popular_item: 'イベントでよく売れている人気の商品として紹介する',
+  seasonal: '今の季節に合う楽しみ方・食べ方を提案する',
+  customer_scene: 'おやつ時間や手土産など、食べるシーンを想像させる',
+  behind_the_scenes: '家族で作っていることを伝える（場所・工程・情景は創作しない）',
+  brand_story: 'プロフィールにある範囲で、nattyがどんなブランドかを伝える',
+  event_notice: '近く出店するイベントで買えることを伝える',
+  event_thanks: '先日のイベントに来てくれた方へのお礼と、その商品の紹介'
+}
+
+export const ANGLE_RULES = {
+  avoidRecentCount: 3, // 直近何件の投稿と同じ切り口を避けるか
+  eventNoticeDays: 3, // 次回イベントまで何日以内なら出店情報を使ってよいか
+  eventThanksDays: 3 // イベント後何日以内ならお礼を使ってよいか
+}
+
+export type AngleContext = {
+  today: string
+  facts: ProductFacts
+  nextEvent: RecEvent | null
+  lastPastEvent: RecEvent | null // この商品を販売した直近の過去イベント
+  recentAngles: (string | null)[] // 紹介系投稿の切り口（新しい順）
+  excludeAngles?: string[] // 作り直し時など、今回避けたい切り口
+}
+
+export type AnglePlan = {
+  allowed: ContentAngle[]
+  eventInfoAllowed: boolean
+  daysUntilNextEvent: number | null
+  daysSinceLastEvent: number | null
+  avoided: string[] // 直近と同じなので避けた切り口
+}
+
+export const findLastPastEvent = (
+  events: RecEvent[],
+  eventProducts: RecEventProduct[],
+  productId: string,
+  today: string
+) => {
+  const ids = new Set(eventProducts.filter(ep => ep.product_id === productId).map(ep => ep.event_id))
+  return events
+    .filter(e => ids.has(e.id) && e.event_date < today && e.status !== 'cancelled')
+    .sort((a, b) => b.event_date.localeCompare(a.event_date))[0] ?? null
+}
+
+export const planAngles = (ctx: AngleContext): AnglePlan => {
+  const { today, facts, nextEvent, lastPastEvent } = ctx
+
+  const daysUntilNextEvent =
+    facts.inNextEvent && nextEvent ? daysBetween(nextEvent.event_date, today) : null
+  const daysSinceLastEvent = lastPastEvent ? daysBetween(today, lastPastEvent.event_date) : null
+
+  const eventInfoAllowed =
+    daysUntilNextEvent !== null && daysUntilNextEvent <= ANGLE_RULES.eventNoticeDays
+
+  const avoided = [
+    ...ctx.recentAngles.slice(0, ANGLE_RULES.avoidRecentCount).filter((a): a is string => !!a),
+    ...(ctx.excludeAngles ?? [])
+  ]
+
+  const conditionOk = (angle: ContentAngle) => {
+    switch (angle) {
+      case 'popular_item':
+        return facts.reasons.includes('sold_out_often')
+      case 'event_notice':
+        return eventInfoAllowed
+      case 'event_thanks':
+        return daysSinceLastEvent !== null && daysSinceLastEvent <= ANGLE_RULES.eventThanksDays
+      default:
+        return true
+    }
+  }
+
+  const possible = CONTENT_ANGLES.filter(conditionOk)
+  let allowed = possible.filter(a => !avoided.includes(a))
+  // 全部避けてしまった場合は、作り直しで指定されたものだけ除く
+  if (allowed.length === 0) {
+    allowed = possible.filter(a => !(ctx.excludeAngles ?? []).includes(a))
+  }
+  if (allowed.length === 0) allowed = ['product_feature']
+
+  return { allowed, eventInfoAllowed, daysUntilNextEvent, daysSinceLastEvent, avoided }
+}
+
+// 季節（JST の月から）
+export const seasonOf = (today: string) => {
+  const m = Number(today.slice(5, 7))
+  if (m >= 3 && m <= 5) return '春'
+  if (m >= 6 && m <= 8) return '夏'
+  if (m >= 9 && m <= 11) return '秋'
+  return '冬'
 }
