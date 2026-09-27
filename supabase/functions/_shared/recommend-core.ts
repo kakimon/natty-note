@@ -10,14 +10,18 @@ export const HISTORY_STATUSES = ['approved', 'posted'] as const
 export const RULES = {
   recentEventCount: 3, // ① 直近何回のイベントを見るか
   soldOutThreshold: 2, // ① 何回以上完売でよく売れているとするか
-  notPostedDays: 14, // ② 何日以上紹介していなければ対象か
+  notPostedDays: 14, // ② 何日以上紹介していなければ対象か（これより最近の紹介がある商品は候補から外す）
+  longNotPostedDays: 30, // ⑥ 何日以上紹介していなければ「長期間紹介していない」とするか
   newProductDays: 30 // ④ 登録から何日以内を新商品とするか
 }
 
+// 販売予定は加点の1つ。販売予定がなくても、人気・新商品・未紹介・長期間未紹介から候補を選ぶ
 export const SCORES = {
-  soldOutOften: 3,
-  inNextEvent: 2,
-  newProduct: 2
+  soldOutOften: 3, // ① 人気（直近3回の販売で2回以上完売）
+  inNextEvent: 2, // ③ 次回の販売予定に入っている（受注販売は対象外）
+  newProduct: 2, // ④ 新商品
+  neverPosted: 2, // ⑤ 一度も紹介していない（approved / posted）
+  longNotPosted: 1 // ⑥ 最後の紹介から30日以上
 }
 
 export type RecProduct = {
@@ -60,7 +64,13 @@ export type RecInput = {
   posts: RecPost[]
 }
 
-export type ReasonKey = 'sold_out_often' | 'in_next_event' | 'new_product' | 'not_posted_recently' | 'never_posted'
+export type ReasonKey =
+  | 'sold_out_often'
+  | 'in_next_event'
+  | 'new_product'
+  | 'never_posted' // 一度も紹介していない
+  | 'long_not_posted' // 30日以上紹介していない
+  | 'not_posted_recently' // 14日以上紹介していない（加点なし・説明用）
 
 export type ProductFacts = {
   product: RecProduct
@@ -72,14 +82,16 @@ export type ProductFacts = {
   isNewProduct: boolean
   notPostedRecently: boolean // ②
   score: number
-  eligible: boolean // ② かつ（① or ③ or ④）
+  eligible: boolean // ②（14日以上紹介なし or 未紹介）かつ 加点あり（販売予定がなくても未紹介・長期間未紹介で加点される）
   reasons: ReasonKey[]
 }
 
 export type RecResult = {
   nextEvent: RecEvent | null
-  candidates: ProductFacts[] // eligible のみ、並び替え済み
+  candidates: ProductFacts[] // eligible のみ、並び替え済み（通常候補が0件ならフォールバックの1件）
   all: ProductFacts[]
+  // 通常のスコアで候補が0件だったため、「最も長く紹介していない商品」を選んだ場合 true
+  fallback: boolean
 }
 
 // timestamptz → JSTの "YYYY-MM-DD"
@@ -167,16 +179,21 @@ export const evaluateProducts = (input: RecInput): RecResult => {
       daysBetween(today, createdDate) <= RULES.newProductDays &&
       lastIntroDate === null
 
+    const neverPosted = lastIntroDate === null
+    const longNotPosted = lastIntroDaysAgo !== null && lastIntroDaysAgo >= RULES.longNotPostedDays
+
     const score =
       (soldOutOften ? SCORES.soldOutOften : 0) +
       (inNextEvent ? SCORES.inNextEvent : 0) +
-      (isNewProduct ? SCORES.newProduct : 0)
+      (isNewProduct ? SCORES.newProduct : 0) +
+      (neverPosted ? SCORES.neverPosted : 0) +
+      (longNotPosted ? SCORES.longNotPosted : 0)
 
     const reasons: ReasonKey[] = []
     if (soldOutOften) reasons.push('sold_out_often')
     if (inNextEvent) reasons.push('in_next_event')
     if (isNewProduct) reasons.push('new_product')
-    reasons.push(lastIntroDate === null ? 'never_posted' : 'not_posted_recently')
+    reasons.push(neverPosted ? 'never_posted' : longNotPosted ? 'long_not_posted' : 'not_posted_recently')
 
     return {
       product,
@@ -203,14 +220,29 @@ export const evaluateProducts = (input: RecInput): RecResult => {
       (a.lastIntroDate ?? '').localeCompare(b.lastIntroDate ?? '')
     )
 
-  return { nextEvent, candidates, all }
+  if (candidates.length > 0) return { nextEvent, candidates, all, fallback: false }
+
+  // ---- フォールバック（通常候補が0件のときだけ）----
+  // 販売予定などの加点がなくても投稿案を出せるように、
+  // 14日以内に紹介済み（approved / posted）の商品を除いたうえで、
+  // 一度も紹介していない商品 → 最終紹介日が最も古い商品 の順に1件選ぶ。
+  // 14日以内に全商品を紹介済みなら候補0件のまま。
+  const fallbackPick = all
+    .filter(f => f.notPostedRecently)
+    .sort((a, b) => {
+      if (a.lastIntroDate === null && b.lastIntroDate !== null) return -1
+      if (b.lastIntroDate === null && a.lastIntroDate !== null) return 1
+      return (a.lastIntroDate ?? '').localeCompare(b.lastIntroDate ?? '')
+    })[0]
+
+  return { nextEvent, candidates: fallbackPick ? [fallbackPick] : [], all, fallback: !!fallbackPick }
 }
 
 // 画面表示用の理由（箇条書き）
 export const reasonLines = (f: ProductFacts, nextEvent: RecEvent | null) => {
   const lines: string[] = []
   if (f.reasons.includes('sold_out_often')) {
-    lines.push(`最近よく売れています（直近${f.recentEventCount}回中${f.soldOutCount}回完売）`)
+    lines.push(`最近の販売で完売が続いています（直近${f.recentEventCount}回中${f.soldOutCount}回完売）`)
   }
   if (f.reasons.includes('in_next_event') && nextEvent) {
     lines.push('次回の販売予定に入っています')
@@ -226,15 +258,17 @@ export const reasonLines = (f: ProductFacts, nextEvent: RecEvent | null) => {
   return lines
 }
 
-// 画面用: natty noteがこの商品をおすすめした理由（1文）
-// 例: 「次回の出店で販売する予定で、まだSNSで紹介していない商品なので、今回おすすめしました。」
+// 画面用: natty noteがこの商品をおすすめした理由（1文）。実際に当てはまる理由だけを並べる
+// 例: 「まだSNSで紹介していない商品なので、今回おすすめしました。」
+//     「最近の販売で完売が続いていて、しばらくSNSで紹介していない商品なので、今回おすすめしました。」
 export const reasonSentence = (f: ProductFacts) => {
   const parts: string[] = []
-  if (f.reasons.includes('sold_out_often')) parts.push('最近のイベントでよく完売していて')
+  if (f.reasons.includes('sold_out_often')) parts.push('最近の販売で完売が続いていて')
   if (f.reasons.includes('in_next_event')) parts.push('次回の販売予定に入っていて')
   if (f.reasons.includes('new_product')) parts.push('新しく登録した商品で')
+  // 候補は「14日以上紹介していない or 未紹介」だけなので、どちらかは必ず事実
   if (f.reasons.includes('never_posted')) parts.push('まだSNSで紹介していない')
-  else if (f.lastIntroDaysAgo !== null) parts.push(`${f.lastIntroDaysAgo}日間SNSで紹介していない`)
+  else parts.push('しばらくSNSで紹介していない')
   return `${parts.join('、')}商品なので、今回おすすめしました。`
 }
 

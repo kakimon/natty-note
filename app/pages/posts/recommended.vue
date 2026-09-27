@@ -3,6 +3,7 @@ import { loadRecommendations, reasonLines, reasonSentence, type ProductFacts, ty
 import { copyText, threadsIntentUrl, xIntentUrl } from '~/utils/clipboard'
 import { xWeightedLength } from '~/utils/postTemplates'
 import { markPhotoUsed, signedPhotoUrls, unusedProductPhotos, type Photo } from '~/utils/photos'
+import { generatePostForProduct } from '~/utils/postGeneration'
 
 type Platform = 'x' | 'threads'
 type PostStatus = 'draft' | 'approved' | 'posted'
@@ -101,7 +102,11 @@ const choosePhoto = (id: string | null) => {
   void applyPhotoToDrafts()
 }
 
-const selected = computed(() => candidates.value[selectedIndex.value] ?? null)
+// ?product=<id> で商品を指定して開いた場合（将来の「商品を選んで投稿」用）。おすすめ候補でなくても作れる
+const route = useRoute()
+const pickedProductId = typeof route.query.product === 'string' ? route.query.product : ''
+const picked = ref<ProductFacts | null>(null)
+const selected = computed(() => picked.value ?? candidates.value[selectedIndex.value] ?? null)
 const others = computed(() =>
   candidates.value
     .map((c, i) => ({ c, i }))
@@ -131,6 +136,10 @@ onMounted(async () => {
     )
     candidates.value = result.candidates
     nextEvent.value = result.nextEvent
+    if (pickedProductId) {
+      picked.value = result.all.find(f => f.product.id === pickedProductId) ?? null
+      if (!picked.value) errorMessage.value = '指定した商品が見つかりません（販売終了の商品は選べません）'
+    }
   } catch (error: any) {
     errorMessage.value = error?.message ?? '読み込みに失敗しました'
   } finally {
@@ -158,24 +167,10 @@ const generate = async () => {
   generateError.value = ''
 
   try {
-    const { data, error } = await $supabase.functions.invoke('generate-recommended-post', {
-      body: {
-        product_id: selected.value.product.id,
-        exclude_angles: triedAngles.value,
-        avoid_post_ids: triedPostIds.value.slice(-4)
-      }
+    const data = await generatePostForProduct($supabase, selected.value.product.id, {
+      excludeAngles: triedAngles.value,
+      avoidPostIds: triedPostIds.value
     })
-
-    if (error) {
-      // Functionが返したエラーメッセージを取り出す
-      let message = ''
-      try {
-        message = (await (error as any).context?.json())?.error ?? ''
-      } catch {
-        // 取れなければ下の共通メッセージ
-      }
-      throw new Error(message || '文章を作れませんでした。時間をおいてもう一度お試しください。')
-    }
 
     aiReason.value = data.reason ?? ''
     angle.value = data.content_angle ?? ''
@@ -424,15 +419,15 @@ const confirmPosted = async () => {
       <div v-else-if="!selected" class="empty">
         <h1>今はおすすめ投稿はありません</h1>
         <p>
-          よく売れている商品や、次のイベントで販売する商品が出てきたら、ここでおすすめします。
+          どの商品も最近14日以内にSNSで紹介済みです。しばらくすると、また紹介する商品をおすすめします。
         </p>
       </div>
 
       <template v-else>
-        <p class="label">✨ natty noteからのおすすめ</p>
+        <p class="label">{{ picked ? '✏️ 選んだ商品' : '✨ natty noteからのおすすめ' }}</p>
         <h1>{{ selected.product.name }}を<br>紹介してみませんか？</h1>
 
-        <div class="reasons">
+        <div v-if="!picked" class="reasons">
           <p class="reasons-title">natty noteがおすすめした理由</p>
           <p class="reasons-text">{{ reasonSentence(selected) }}</p>
         </div>
@@ -601,7 +596,7 @@ const confirmPosted = async () => {
           </button>
         </template>
 
-        <div v-if="others.length" class="others">
+        <div v-if="others.length && !picked" class="others">
           <p class="others-title">ほかの候補</p>
           <button
             v-for="{ c, i } in others"

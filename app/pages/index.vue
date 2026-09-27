@@ -154,9 +154,9 @@ async function signOut() {
       <p v-if="authError" class="error" role="alert">{{ authError }}</p>
       <nav class="menu">
         <NuxtLink to="/posts/recommended" class="menu-link menu-featured">✨ おすすめ投稿</NuxtLink>
-        <NuxtLink to="/events/new" class="menu-link">出店予定を登録</NuxtLink>
         <NuxtLink to="/settings/x" class="menu-link">Xアカウント連携</NuxtLink>
       </nav>
+      <UpcomingEvents />
       <div class="products-head">
         <h2>商品一覧</h2>
         <NuxtLink to="/products" class="manage-link">商品を管理する</NuxtLink>

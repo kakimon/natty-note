@@ -1,6 +1,7 @@
 // AIおまかせ投稿（AI宣伝広報部長）
 //
 // 1. 商品を選ぶ   … ブラウザ側のルール（recommend-core.ts）＋奥さんの選択。ここでは product_id を受け取る
+//                   （おすすめ候補かどうかは問わない。将来の「商品を選んで投稿」でもこの Function をそのまま使う）
 // 2. 切り口を選ぶ … 使ってよい切り口をプログラムで絞り、その中から AI が選ぶ（API呼び出し1回目）
 //                   この段階ではイベントの名前・日付・場所をAIに見せない
 // 3. 文章を書く   … 選んだ切り口に必要な情報だけを渡して、X案・Threads案を書かせる（API呼び出し2回目）
@@ -368,6 +369,7 @@ Deno.serve(async req => {
       recent_event_count: facts.recentEventCount,
       last_introduced_days_ago: facts.lastIntroDaysAgo,
       never_introduced: facts.lastIntroDate === null,
+      long_not_introduced: facts.reasons.includes('long_not_posted'),
       is_new_product: facts.isNewProduct
     }
 
