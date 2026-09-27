@@ -58,7 +58,7 @@ const xWeightedLength = (text: string) =>
   Array.from(text).reduce((sum, ch) => sum + ((ch.codePointAt(0) ?? 0) <= 0x10ff ? 1 : 2), 0)
 
 const categoryLabel = (c: string | null) =>
-  c === 'chiffon' ? 'シフォンケーキ' : c === 'muffin' ? 'マフィン' : c ?? ''
+  c === 'chiffon' ? 'シフォンケーキ' : c === 'muffin' ? 'マフィン' : c === 'other' ? '焼き菓子' : c ?? ''
 
 const formatEventDate = (value: string) => {
   const [y, m, d] = value.split('-').map(Number)

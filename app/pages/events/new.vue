@@ -45,6 +45,10 @@ const muffinProducts = computed(() =>
   products.value.filter(p => p.category === 'muffin')
 )
 
+const otherProducts = computed(() =>
+  products.value.filter(p => p.category !== 'chiffon' && p.category !== 'muffin')
+)
+
 const selectedProducts = computed(() =>
   products.value.filter(p => form.productIds.includes(p.id))
 )
@@ -202,6 +206,23 @@ const saveEvent = async () => {
           {{ product.name }}
         </label>
 
+        <template v-if="otherProducts.length">
+          <h2>その他</h2>
+
+          <label
+            v-for="product in otherProducts"
+            :key="product.id"
+            class="product"
+          >
+            <input
+              v-model="form.productIds"
+              type="checkbox"
+              :value="product.id"
+            >
+            {{ product.name }}
+          </label>
+        </template>
+
         <div class="buttons">
           <button class="secondary" @click="previousStep">
             戻る
@@ -266,6 +287,11 @@ const saveEvent = async () => {
       <p v-if="errorMessage && step !== 4" class="error">
         {{ errorMessage }}
       </p>
+
+      <!-- どのSTEPからでもトップへ戻れる（保存前なので確認なし） -->
+      <NuxtLink to="/" class="back-home">
+        トップへ戻る
+      </NuxtLink>
     </section>
   </main>
 </template>
@@ -377,6 +403,21 @@ dt {
 dd {
   margin: 4px 0 0;
   font-weight: 600;
+}
+
+.back-home {
+  display: block;
+  margin-top: 24px;
+  padding: 12px;
+  color: #294638;
+  font-size: 14px;
+  text-align: center;
+  text-decoration: underline;
+}
+
+.back-home:focus-visible {
+  outline: 3px solid #91b8a1;
+  outline-offset: 2px;
 }
 
 .error {

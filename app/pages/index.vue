@@ -29,6 +29,7 @@ async function loadProducts() {
     const { data, error } = await $supabase
       .from('products')
       .select('id, name')
+      .eq('active', true)
       .order('name')
       .abortSignal(AbortSignal.timeout(15000))
     if (disposed || currentRequest !== requestId || session.value?.user.id !== userId) return
@@ -154,8 +155,12 @@ async function signOut() {
       <nav class="menu">
         <NuxtLink to="/posts/recommended" class="menu-link menu-featured">✨ おすすめ投稿</NuxtLink>
         <NuxtLink to="/events/new" class="menu-link">出店予定を登録</NuxtLink>
+        <NuxtLink to="/settings/x" class="menu-link">Xアカウント連携</NuxtLink>
       </nav>
-      <h2>商品一覧</h2>
+      <div class="products-head">
+        <h2>商品一覧</h2>
+        <NuxtLink to="/products" class="manage-link">商品を管理する</NuxtLink>
+      </div>
       <p v-if="loading" role="status">読み込み中...</p>
       <div v-else-if="productError" role="alert">
         <p class="error">エラー: {{ productError }}</p>
@@ -187,6 +192,10 @@ input:focus-visible, button:focus-visible { outline: 3px solid #91b8a1; outline-
 .account { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 28px; }
 .account p { margin: 0; min-width: 0; }
 .error { color: #a12d28; }
+.products-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.products-head h2 { margin: 0; }
+.manage-link { padding: 10px 14px; border-radius: 10px; background: #eef2ee; color: #294638; font-weight: 700; text-decoration: none; }
+.manage-link:focus-visible { outline: 3px solid #91b8a1; outline-offset: 3px; }
 .menu { display: grid; gap: 10px; margin-bottom: 28px; }
 .menu-link { display: block; padding: 14px; border-radius: 10px; background: #eef2ee; color: #294638; font-weight: 700; text-align: center; text-decoration: none; }
 .menu-featured { background: #31694f; color: white; }
