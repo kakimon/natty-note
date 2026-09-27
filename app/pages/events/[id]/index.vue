@@ -168,7 +168,7 @@ const otherProducts = computed(() =>
       <div v-else-if="errorMessage" role="alert">
         <p class="error">{{ errorMessage }}</p>
         <div class="buttons">
-          <NuxtLink to="/" class="button secondary">トップへ</NuxtLink>
+          <NuxtLink to="/events" class="button secondary">販売予定一覧へ</NuxtLink>
         </div>
       </div>
 
@@ -239,8 +239,8 @@ const otherProducts = computed(() =>
         </template>
 
         <div class="buttons">
-          <NuxtLink to="/" class="button secondary">
-            トップへ
+          <NuxtLink to="/events" class="button secondary">
+            販売予定一覧へ
           </NuxtLink>
 
           <NuxtLink

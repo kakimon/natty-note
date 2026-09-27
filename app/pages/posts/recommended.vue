@@ -613,7 +613,7 @@ const confirmPosted = async () => {
       </template>
 
       <div class="footer">
-        <NuxtLink to="/" class="link-button">トップへ</NuxtLink>
+        <NuxtLink to="/posts" class="link-button">投稿メニューへ</NuxtLink>
         <button type="button" class="x-check" :disabled="xAccountChecking" @click="checkXAccount">
           {{ xAccountChecking ? '確認中...' : 'Xの投稿先アカウントを確認' }}
         </button>

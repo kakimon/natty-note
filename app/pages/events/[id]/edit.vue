@@ -233,7 +233,7 @@ const save = async () => {
       </form>
 
       <div v-else-if="!loading" class="footer">
-        <NuxtLink to="/" class="button secondary">トップへ</NuxtLink>
+        <NuxtLink to="/events" class="button secondary">販売予定一覧へ</NuxtLink>
       </div>
     </section>
   </main>

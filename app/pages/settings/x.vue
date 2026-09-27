@@ -119,7 +119,7 @@ const startAuth = async () => {
         </button>
       </template>
 
-      <NuxtLink to="/" class="back">natty noteへ戻る</NuxtLink>
+      <NuxtLink to="/settings" class="back">設定へ戻る</NuxtLink>
     </section>
   </main>
 </template>

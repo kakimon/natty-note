@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// トップページ用: 今日以降の販売予定（中止・終了を除く）を日付の近い順に5件
+// トップページ用: 今日以降の販売予定（中止・終了を除く）を日付の近い順に limit 件（既定3件）
 import { formatShortDate, loadEventSummaries, shortProductList, type EventSummary } from '~/utils/events'
 import { saleTypeDef, statusLabelFor } from '~/utils/saleTypes'
 
+const props = withDefaults(defineProps<{ limit?: number }>(), { limit: 3 })
 const { $supabase } = useNuxtApp()
 const events = ref<EventSummary[]>([])
 const loading = ref(true)
@@ -14,7 +15,7 @@ onMounted(async () => {
     return
   }
   try {
-    events.value = await loadEventSummaries($supabase, { upcomingOnly: true, limit: 5 })
+    events.value = await loadEventSummaries($supabase, { upcomingOnly: true, limit: props.limit })
   } catch {
     error.value = '販売予定を読み込めませんでした'
   } finally {

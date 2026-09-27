@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type { Session } from '@supabase/supabase-js'
 
-type Product = { id: string | number; name: string }
-
 const { $supabase, $supabaseConfigError } = useNuxtApp()
 const session = shallowRef<Session | null>(null)
 const initializing = ref(Boolean($supabase))
@@ -11,47 +9,9 @@ const password = ref('')
 const submitting = ref(false)
 const signingOut = ref(false)
 const authError = ref('')
-const products = ref<Product[]>([])
-const loading = ref(false)
-const productError = ref('')
-let requestId = 0
 let authRevision = 0
 let disposed = false
 let unsubscribe: (() => void) | undefined
-
-async function loadProducts() {
-  if (!$supabase || !session.value) return
-  const currentRequest = ++requestId
-  const userId = session.value.user.id
-  loading.value = true
-  productError.value = ''
-  try {
-    const { data, error } = await $supabase
-      .from('products')
-      .select('id, name')
-      .eq('active', true)
-      .order('name')
-      .abortSignal(AbortSignal.timeout(15000))
-    if (disposed || currentRequest !== requestId || session.value?.user.id !== userId) return
-    if (error) productError.value = error.message
-    else products.value = data ?? []
-  } catch {
-    if (!disposed && currentRequest === requestId) {
-      productError.value = '商品を取得できませんでした。通信状態を確認して再試行してください。'
-    }
-  } finally {
-    if (!disposed && currentRequest === requestId) loading.value = false
-  }
-}
-
-// Run outside the auth callback so Supabase requests do not block its auth lock.
-watch(() => session.value?.user.id, () => {
-  requestId++
-  products.value = []
-  productError.value = ''
-  loading.value = false
-  if (session.value) void loadProducts()
-}, { flush: 'post' })
 
 onMounted(async () => {
   if (!$supabase) return
@@ -76,7 +36,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   disposed = true
-  requestId++
   unsubscribe?.()
 })
 
@@ -152,30 +111,18 @@ async function signOut() {
         <button class="secondary" :disabled="signingOut" @click="signOut">{{ signingOut ? 'ログアウト中...' : 'ログアウト' }}</button>
       </div>
       <p v-if="authError" class="error" role="alert">{{ authError }}</p>
-      <nav class="menu">
-        <NuxtLink to="/posts/recommended" class="menu-link menu-featured">✨ おすすめ投稿</NuxtLink>
-        <NuxtLink to="/settings/x" class="menu-link">Xアカウント連携</NuxtLink>
+      <nav class="menu" aria-label="投稿">
+        <NuxtLink to="/posts/recommended" class="menu-link menu-featured">✨ おすすめ投稿を作る</NuxtLink>
+        <NuxtLink to="/posts" class="menu-link">🍰 商品を選んで投稿</NuxtLink>
       </nav>
-      <UpcomingEvents />
-      <div class="products-head">
-        <h2>商品一覧</h2>
-        <NuxtLink to="/products" class="manage-link">商品を管理する</NuxtLink>
-      </div>
-      <p v-if="loading" role="status">読み込み中...</p>
-      <div v-else-if="productError" role="alert">
-        <p class="error">エラー: {{ productError }}</p>
-        <button class="secondary" @click="loadProducts">再試行</button>
-      </div>
-      <p v-else-if="products.length === 0">表示できる商品がありません。</p>
-      <ul v-else>
-        <li v-for="product in products" :key="product.id">{{ product.name }}</li>
-      </ul>
+      <UpcomingEvents :limit="3" />
+      <p class="manage"><NuxtLink to="/products" class="manage-link">商品を管理する</NuxtLink></p>
     </section>
   </main>
 </template>
 
 <style scoped>
-main { max-width: 640px; margin: 0 auto; padding: 56px 24px; }
+main { max-width: 640px; margin: 0 auto; padding: 40px 24px 24px; }
 header { margin-bottom: 32px; }
 h1 { margin: 0; font-size: 32px; letter-spacing: -.04em; }
 h2 { margin: 0 0 16px; font-size: 22px; }
@@ -192,15 +139,12 @@ input:focus-visible, button:focus-visible { outline: 3px solid #91b8a1; outline-
 .account { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 28px; }
 .account p { margin: 0; min-width: 0; }
 .error { color: #a12d28; }
-.products-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-.products-head h2 { margin: 0; }
-.manage-link { padding: 10px 14px; border-radius: 10px; background: #eef2ee; color: #294638; font-weight: 700; text-decoration: none; }
+.manage { margin: 0; text-align: center; }
+.manage-link { display: inline-block; padding: 12px 16px; color: #31694f; font-weight: 700; }
 .manage-link:focus-visible { outline: 3px solid #91b8a1; outline-offset: 3px; }
 .menu { display: grid; gap: 10px; margin-bottom: 28px; }
-.menu-link { display: block; padding: 14px; border-radius: 10px; background: #eef2ee; color: #294638; font-weight: 700; text-align: center; text-decoration: none; }
-.menu-featured { background: #31694f; color: white; }
+.menu-link { display: block; padding: 16px; min-height: 52px; border-radius: 10px; background: #eef2ee; color: #294638; font-weight: 700; text-align: center; text-decoration: none; }
+.menu-featured { padding: 20px 16px; background: #31694f; color: white; font-size: 18px; }
 .menu-link:focus-visible { outline: 3px solid #91b8a1; outline-offset: 3px; }
-ul { padding-left: 22px; }
-li { padding: 10px 0; border-bottom: 1px solid #edf0eb; overflow-wrap: anywhere; }
-@media (max-width: 480px) { main { padding: 32px 16px; } .card { padding: 20px; } }
+@media (max-width: 480px) { main { padding: 24px 16px 16px; } .card { padding: 20px; } }
 </style>

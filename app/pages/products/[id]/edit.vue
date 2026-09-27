@@ -269,7 +269,7 @@ button:disabled { opacity: .5; cursor: wait; }
 .footer { margin-top: 28px; }
 .back { display: block; padding: 14px; border-radius: 10px; background: #eef2ee; color: #294638; text-align: center; text-decoration: none; font-weight: 700; }
 
-.overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .4); }
+.overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .4); }
 .dialog { width: 100%; max-width: 420px; padding: 24px; border-radius: 18px; background: white; }
 .dialog-title { margin: 0 0 8px; font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
 .dialog-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }

@@ -290,7 +290,7 @@ const changeStatus = async (product: Product, status: SalesStatus) => {
         <p class="brand">natty note</p>
         <p class="error">{{ errorMessage }}</p>
         <div class="footer">
-          <NuxtLink to="/" class="link-button">トップへ</NuxtLink>
+          <NuxtLink to="/events" class="link-button">販売予定一覧へ</NuxtLink>
         </div>
       </div>
 
@@ -590,8 +590,10 @@ h1 {
 .notice {
   position: fixed;
   right: 12px;
-  bottom: 12px;
+  /* 下部ナビの上に出す（ナビ高さ＋セーフエリア分を持ち上げる） */
+  bottom: calc(var(--nav-space, 16px) - 4px);
   left: 12px;
+  z-index: 45;
   max-width: 596px;
   margin: 0 auto;
   padding: 16px;

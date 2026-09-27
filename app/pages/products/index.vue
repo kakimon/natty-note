@@ -112,9 +112,6 @@ const resume = async (product: ProductRow) => {
         </details>
       </template>
 
-      <div class="footer">
-        <NuxtLink to="/" class="back">トップへ戻る</NuxtLink>
-      </div>
     </section>
   </main>
 </template>

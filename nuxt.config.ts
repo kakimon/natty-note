@@ -5,7 +5,11 @@ export default defineNuxtConfig({
 
   app: {
     // GitHub Pages では /natty-note/ 配下で公開する（Actions で NUXT_APP_BASE_URL を渡す）
-    baseURL: process.env.NUXT_APP_BASE_URL || '/'
+    baseURL: process.env.NUXT_APP_BASE_URL || '/',
+    head: {
+      // viewport-fit=cover: iPhone の safe-area（env(safe-area-inset-bottom)）を使うため
+      meta: [{ name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' }]
+    }
   },
 
   runtimeConfig: {

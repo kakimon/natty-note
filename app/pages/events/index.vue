@@ -79,7 +79,6 @@ onMounted(async () => {
       </template>
 
       <p class="hint">予定を押すと、内容の確認・編集・中止ができます。</p>
-      <NuxtLink to="/" class="back">トップへ戻る</NuxtLink>
     </section>
   </main>
 </template>
