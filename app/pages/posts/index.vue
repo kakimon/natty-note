@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // 投稿メニュー: おすすめ投稿を作る / 商品を選んで投稿する
 import { categoryLabel } from '~/utils/products'
+import { loadPostHistory, type HistoryPost } from '~/utils/postHistory'
+import { loadXUsername } from '~/utils/xAccount'
 
 type PickProduct = { id: string; name: string; category: string | null }
 
@@ -33,7 +35,33 @@ const load = async () => {
   }
 }
 
-onMounted(load)
+// 最近の投稿（approved / posted の直近5件）
+const recent = ref<HistoryPost[]>([])
+const recentLoading = ref(true)
+const recentError = ref('')
+const xUsername = ref<string | null>(null)
+
+const loadRecent = async () => {
+  if (!$supabase) {
+    recentLoading.value = false
+    return
+  }
+  recentLoading.value = true
+  recentError.value = ''
+  loadXUsername($supabase).then(u => { xUsername.value = u }).catch(() => {})
+  try {
+    recent.value = await loadPostHistory($supabase, { limit: 5 })
+  } catch {
+    recentError.value = '最近の投稿を読み込めませんでした。'
+  } finally {
+    recentLoading.value = false
+  }
+}
+
+onMounted(() => {
+  load()
+  loadRecent()
+})
 </script>
 
 <template>
@@ -69,8 +97,17 @@ onMounted(load)
         </li>
       </ul>
 
-      <h2>投稿履歴</h2>
-      <p class="empty">投稿履歴の一覧は今後追加予定です。</p>
+      <h2>最近の投稿</h2>
+      <p v-if="recentLoading" role="status">読み込み中...</p>
+      <div v-else-if="recentError" role="alert">
+        <p class="error">{{ recentError }}</p>
+        <button type="button" class="retry" @click="loadRecent">再試行</button>
+      </div>
+      <p v-else-if="recent.length === 0" class="empty-box">まだ投稿履歴はありません</p>
+      <div v-else class="recent">
+        <PostHistoryCard v-for="p in recent" :key="p.id" :post="p" :x-username="xUsername" compact />
+      </div>
+      <NuxtLink to="/posts/history" class="history-link">すべての投稿履歴を見る</NuxtLink>
     </section>
   </main>
 </template>
@@ -119,6 +156,9 @@ h2 { margin: 32px 0 6px; font-size: 18px; }
 .retry { padding: 12px 18px; border: 0; border-radius: 10px; background: #eef2ee; color: #294638; font: inherit; font-weight: 700; cursor: pointer; }
 .error { color: #b42318; }
 .empty { margin: 12px 0 0; opacity: .7; line-height: 1.7; }
+.empty-box { margin: 12px 0 0; padding: 20px; border-radius: 12px; background: #f6f7f2; text-align: center; opacity: .8; }
+.recent { display: grid; gap: 10px; margin-top: 12px; }
+.history-link { display: block; margin-top: 14px; padding: 14px; border-radius: 12px; background: #eef2ee; color: #294638; font-weight: 700; text-align: center; text-decoration: none; }
 .empty a { color: #31694f; font-weight: 700; }
 
 a:focus-visible, button:focus-visible { outline: 3px solid #91b8a1; outline-offset: 2px; }

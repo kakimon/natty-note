@@ -82,7 +82,7 @@ async function signOut() {
   <main>
     <header>
       <h1>natty note</h1>
-      <p>ふたりの暮らしのメモ</p>
+      <p>nattyの販売と発信を、かんたんに。</p>
     </header>
 
     <section v-if="$supabaseConfigError" class="card" role="alert">

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 // 設定メニュー。Xの連携状態は DB（x_account_connection）の表示用情報だけを読む（X APIは呼ばない）
+import { loadXUsername } from '~/utils/xAccount'
+
 const { $supabase } = useNuxtApp()
 const loading = ref(true)
 const username = ref<string | null>(null)
@@ -12,12 +14,7 @@ onMounted(async () => {
     return
   }
   try {
-    const { data, error } = await $supabase
-      .from('x_account_connection')
-      .select('username')
-      .maybeSingle()
-    if (error) throw error
-    username.value = (data as { username: string } | null)?.username ?? null
+    username.value = await loadXUsername($supabase)
   } catch {
     loadFailed.value = true
   } finally {
