@@ -35,6 +35,8 @@ export type RecEvent = {
   start_time?: string | null
   location?: string | null
   status: string
+  // 販売方法: event / delivery / order / other（未設定の古いデータは event 扱い）
+  sale_type?: string | null
 }
 
 export type RecEventProduct = { event_id: string; product_id: string }
@@ -96,9 +98,15 @@ export const daysBetween = (a: string, b: string) => {
   return Math.round((Date.UTC(ay, am - 1, ad) - Date.UTC(by, bm - 1, bd)) / 86_400_000)
 }
 
+// 次回の販売予定（おすすめ条件③・AIへ渡す次回情報に使う）
+// 受注販売（order）は個別のご注文なので宣伝材料にしない → 対象外
 export const findNextEvent = (events: RecEvent[], today: string) =>
   events
-    .filter(e => e.event_date >= today && (e.status === 'scheduled' || e.status === 'open'))
+    .filter(e =>
+      e.event_date >= today &&
+      (e.status === 'scheduled' || e.status === 'open') &&
+      (e.sale_type ?? 'event') !== 'order'
+    )
     .sort((a, b) =>
       a.event_date.localeCompare(b.event_date) ||
       (a.start_time ?? '').localeCompare(b.start_time ?? '')
@@ -205,7 +213,7 @@ export const reasonLines = (f: ProductFacts, nextEvent: RecEvent | null) => {
     lines.push(`最近よく売れています（直近${f.recentEventCount}回中${f.soldOutCount}回完売）`)
   }
   if (f.reasons.includes('in_next_event') && nextEvent) {
-    lines.push('次回の出店で販売予定です')
+    lines.push('次回の販売予定に入っています')
   }
   if (f.reasons.includes('new_product')) {
     lines.push('新しく登録した商品です')
@@ -223,7 +231,7 @@ export const reasonLines = (f: ProductFacts, nextEvent: RecEvent | null) => {
 export const reasonSentence = (f: ProductFacts) => {
   const parts: string[] = []
   if (f.reasons.includes('sold_out_often')) parts.push('最近のイベントでよく完売していて')
-  if (f.reasons.includes('in_next_event')) parts.push('次回の出店で販売する予定で')
+  if (f.reasons.includes('in_next_event')) parts.push('次回の販売予定に入っていて')
   if (f.reasons.includes('new_product')) parts.push('新しく登録した商品で')
   if (f.reasons.includes('never_posted')) parts.push('まだSNSで紹介していない')
   else if (f.lastIntroDaysAgo !== null) parts.push(`${f.lastIntroDaysAgo}日間SNSで紹介していない`)
@@ -320,8 +328,11 @@ export const planAngles = (ctx: AngleContext): AnglePlan => {
     facts.inNextEvent && nextEvent ? daysBetween(nextEvent.event_date, today) : null
   const daysSinceLastEvent = lastPastEvent ? daysBetween(today, lastPastEvent.event_date) : null
 
+  // 出店のおしらせは、イベント出店（sale_type='event'）が3日以内のときだけ
   const eventInfoAllowed =
-    daysUntilNextEvent !== null && daysUntilNextEvent <= ANGLE_RULES.eventNoticeDays
+    daysUntilNextEvent !== null &&
+    daysUntilNextEvent <= ANGLE_RULES.eventNoticeDays &&
+    (nextEvent?.sale_type ?? 'event') === 'event'
 
   const avoided = [
     ...ctx.recentAngles.slice(0, ANGLE_RULES.avoidRecentCount).filter((a): a is string => !!a),
@@ -335,7 +346,12 @@ export const planAngles = (ctx: AngleContext): AnglePlan => {
       case 'event_notice':
         return eventInfoAllowed
       case 'event_thanks':
-        return daysSinceLastEvent !== null && daysSinceLastEvent <= ANGLE_RULES.eventThanksDays
+        // お礼はイベント出店のあとだけ（直売所への納品・受注販売では使わない）
+        return (
+          daysSinceLastEvent !== null &&
+          daysSinceLastEvent <= ANGLE_RULES.eventThanksDays &&
+          (lastPastEvent?.sale_type ?? 'event') === 'event'
+        )
       default:
         return true
     }

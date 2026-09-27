@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { saleTypeLabel, statusLabelFor } from '~/utils/saleTypes'
+
 type SalesStatus = 'available' | 'few_left' | 'sold_out'
 
 type Product = {
@@ -190,7 +192,7 @@ onMounted(async () => {
 
     if (eventError) throw eventError
     if (!eventData) {
-      errorMessage.value = '出店予定が見つかりませんでした'
+      errorMessage.value = '販売予定が見つかりませんでした'
       return
     }
     event.value = eventData
@@ -228,8 +230,12 @@ onMounted(async () => {
   }
 })
 
+// 当日の販売状況（販売中／残りわずか／完売）と速報はイベント出店だけ。
+// 直売所への納品・受注販売・その他は、natty 側でリアルタイムの在庫が分からないため使わない
+const liveSalesEnabled = computed(() => (event.value?.sale_type ?? 'event') === 'event')
+
 const changeStatus = async (product: Product, status: SalesStatus) => {
-  if (!$supabase || saving[product.id]) return
+  if (!$supabase || saving[product.id] || !liveSalesEnabled.value) return
   if (statusOf(product.id) === status) return
 
   const previous = results[product.id]
@@ -291,7 +297,7 @@ const changeStatus = async (product: Product, status: SalesStatus) => {
       <template v-else-if="event">
         <header class="header">
           <p class="label">
-            今日の出店<span v-if="event.event_date">　{{ formatDate(event.event_date) }}</span>
+            {{ (event.sale_type ?? 'event') === 'event' ? '今日の出店' : `今日の${saleTypeLabel(event.sale_type)}` }}<span v-if="event.event_date">　{{ formatDate(event.event_date) }}</span>
           </p>
           <h1>{{ event.name }}</h1>
           <p class="time">
@@ -301,11 +307,17 @@ const changeStatus = async (product: Product, status: SalesStatus) => {
               class="event-status"
               :class="`event-status-${event.status}`"
             >
-              {{ eventStatusLabels[event.status as EventStatus] ?? event.status }}
+              {{ statusLabelFor(event.sale_type, event.status) }}
             </span>
           </p>
         </header>
 
+        <div v-if="!liveSalesEnabled" class="no-live" role="status">
+          <p>この販売方法では、当日の販売状況の記録と速報のおしらせは使いません。</p>
+          <p>（販売状況の記録はイベント出店のときだけ使えます）</p>
+        </div>
+
+        <template v-else>
         <div v-if="products.length" class="summary">
           <span class="chip chip-available">販売中 {{ counts.available }}</span>
           <span class="chip chip-few_left">残りわずか {{ counts.few_left }}</span>
@@ -351,10 +363,11 @@ const changeStatus = async (product: Product, status: SalesStatus) => {
             </div>
           </li>
         </ul>
+        </template>
 
         <div class="footer">
           <NuxtLink
-            v-if="products.length"
+            v-if="products.length && (event.sale_type ?? 'event') === 'event'"
             :to="postLink('closing_soon')"
             class="link-button"
           >
@@ -362,11 +375,11 @@ const changeStatus = async (product: Product, status: SalesStatus) => {
           </NuxtLink>
 
           <NuxtLink :to="`/events/${event.id}`" class="link-button">
-            出店予定の詳細へ
+            販売予定の詳細へ
           </NuxtLink>
         </div>
 
-        <div v-if="notice" class="notice" role="status">
+        <div v-if="notice && liveSalesEnabled" class="notice" role="status">
           <p class="notice-text">
             {{ notice.product.name }}を{{ statusLabel(notice.status) }}にしました
           </p>
@@ -621,6 +634,18 @@ h1 {
 .notice-secondary {
   background: rgba(255, 255, 255, .14);
   color: white;
+}
+
+.no-live {
+  margin: 16px 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: #f6f7f2;
+  line-height: 1.7;
+}
+
+.no-live p {
+  margin: 0;
 }
 
 .footer {

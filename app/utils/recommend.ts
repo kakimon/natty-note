@@ -21,7 +21,7 @@ export const loadRecommendations = async (
       .from('products')
       .select('id, name, category, description, created_at')
       .eq('active', true),
-    supabase.from('events').select('id, name, event_date, start_time, location, status'),
+    supabase.from('events').select('id, name, event_date, start_time, location, status, sale_type'),
     supabase.from('event_products').select('event_id, product_id'),
     supabase.from('sales_results').select('event_id, product_id, status'),
     supabase

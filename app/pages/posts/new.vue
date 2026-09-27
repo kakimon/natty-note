@@ -108,7 +108,7 @@ onMounted(async () => {
     const [eventRes, linksRes, resultsRes] = await Promise.all([
       $supabase
         .from('events')
-        .select('id, name, location, end_time')
+        .select('id, name, location, end_time, sale_type')
         .eq('id', eventId)
         .maybeSingle(),
       $supabase
@@ -129,6 +129,13 @@ onMounted(async () => {
       return
     }
     event.value = eventRes.data
+
+    // 「まもなく終了」はイベント出店だけ（直売所・受注・その他では作らない）
+    // 当日速報（完売・残りわずか・まもなく終了）はイベント出店だけ
+    if ((event.value.sale_type ?? 'event') !== 'event') {
+      errorMessage.value = '当日速報のおしらせはイベント出店のときだけ作れます'
+      return
+    }
 
     const statusByProduct: Record<string, string> = {}
     for (const r of resultsRes.data ?? []) statusByProduct[r.product_id] = r.status

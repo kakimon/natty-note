@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { deleteEventCompletely, eventHistoryCounts } from '~/utils/events'
+import { saleTypeDef, statusLabelFor } from '~/utils/saleTypes'
 
 const route = useRoute()
 const { $supabase, $supabaseConfigError } = useNuxtApp()
@@ -51,7 +52,7 @@ const askDelete = async () => {
   try {
     const counts = await eventHistoryCounts($supabase, event.value.id)
     if (counts.sales || counts.posts) {
-      deleteBlocked.value = 'この出店予定には販売記録または投稿履歴があります。\n履歴を残すため完全削除はできません。\n開催しなかった場合は「中止にする」、開催済みなら状態を「終了」にしてください。'
+      deleteBlocked.value = 'この販売予定には販売記録または投稿履歴があります。\n履歴を残すため完全削除はできません。\n開催しなかった場合は「中止にする」、開催済みなら状態を「終了」にしてください。'
     } else {
       dialog.value = 'delete'
     }
@@ -70,7 +71,7 @@ const confirmDelete = async () => {
     const counts = await eventHistoryCounts($supabase, event.value.id)
     if (counts.sales || counts.posts) {
       dialog.value = null
-      deleteBlocked.value = 'この出店予定には販売記録または投稿履歴があります。\n履歴を残すため完全削除はできません。'
+      deleteBlocked.value = 'この販売予定には販売記録または投稿履歴があります。\n履歴を残すため完全削除はできません。'
       return
     }
     await deleteEventCompletely($supabase, event.value.id)
@@ -84,7 +85,8 @@ const confirmDelete = async () => {
 }
 
 const formatStatus = (value?: string | null) =>
-  value ? statusLabels[value] ?? value : '未設定'
+  event.value ? statusLabelFor(event.value.sale_type, value) : (value ? statusLabels[value] ?? value : '未設定')
+const typeDef = computed(() => saleTypeDef(event.value?.sale_type))
 
 // "2026-10-04" → "2026年10月4日(日)"
 const formatDate = (value?: string | null) => {
@@ -114,7 +116,7 @@ onMounted(async () => {
 
     if (eventError) throw eventError
     if (!eventData) {
-      errorMessage.value = '出店予定が見つかりませんでした'
+      errorMessage.value = '販売予定が見つかりませんでした'
       return
     }
 
@@ -171,14 +173,14 @@ const otherProducts = computed(() =>
       </div>
 
       <template v-else-if="event">
-        <p class="label">出店予定</p>
+        <p class="label">{{ typeDef.icon }} {{ typeDef.label }}</p>
         <h1>{{ event.name }}</h1>
 
         <dl>
-          <dt>出店日</dt>
+          <dt>{{ typeDef.dateLabel }}</dt>
           <dd>{{ formatDate(event.event_date) }}</dd>
 
-          <dt>場所</dt>
+          <dt>{{ typeDef.locationLabel }}</dt>
           <dd>{{ event.location || '未入力' }}</dd>
 
           <dt>時間</dt>
@@ -242,6 +244,7 @@ const otherProducts = computed(() =>
           </NuxtLink>
 
           <NuxtLink
+            v-if="(event.sale_type ?? 'event') === 'event'"
             :to="`/events/${event.id}/today`"
             class="button primary"
           >
@@ -254,7 +257,7 @@ const otherProducts = computed(() =>
         </NuxtLink>
 
         <section class="manage">
-          <h2>この出店予定の管理</h2>
+          <h2>この販売予定の管理</h2>
 
           <NuxtLink :to="`/events/${event.id}/edit`" class="button secondary">
             編集する
@@ -293,7 +296,7 @@ const otherProducts = computed(() =>
     <ConfirmDialog
       v-if="dialog === 'cancel' && event"
       :title="`「${event.name}」を中止にしますか？`"
-      message="出店予定は残り、状態が「中止」になります。あとで「出店予定に戻す」こともできます。"
+      message="販売予定は残り、状態が「中止」になります。あとで「出店予定に戻す」こともできます。"
       confirm-label="中止にする"
       :busy="busy"
       danger

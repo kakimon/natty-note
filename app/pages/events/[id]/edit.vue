@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { EVENT_STATUS_OPTIONS } from '~/utils/events'
+import { SALE_TYPES, resolveSaleName, saleTypeDef, statusLabelFor } from '~/utils/saleTypes'
 
 type Product = { id: string; name: string; category: string | null; active: boolean }
 
@@ -13,6 +14,7 @@ const errorMessage = ref('')
 const found = ref(false)
 
 const form = reactive({
+  saleType: 'event',
   eventDate: '',
   name: '',
   location: '',
@@ -23,6 +25,10 @@ const form = reactive({
   productIds: [] as string[]
 })
 const errors = reactive({ eventDate: '', name: '', time: '' })
+const typeDef = computed(() => saleTypeDef(form.saleType))
+const statusOptions = computed(() =>
+  EVENT_STATUS_OPTIONS.map(o => ({ value: o.value, label: statusLabelFor(form.saleType, o.value) }))
+)
 
 const products = ref<Product[]>([])
 const originalProductIds = ref<string[]>([])
@@ -55,10 +61,11 @@ onMounted(async () => {
     ])
     for (const r of [eventRes, productsRes, linksRes, salesRes]) if (r.error) throw r.error
     if (!eventRes.data) {
-      errorMessage.value = '出店予定が見つかりませんでした'
+      errorMessage.value = '販売予定が見つかりませんでした'
       return
     }
     const ev = eventRes.data
+    form.saleType = ev.sale_type ?? 'event'
     form.eventDate = ev.event_date ?? ''
     form.name = ev.name ?? ''
     form.location = ev.location ?? ''
@@ -80,8 +87,8 @@ onMounted(async () => {
 })
 
 const validate = () => {
-  errors.eventDate = form.eventDate ? '' : '出店日を入力してください'
-  errors.name = form.name.trim() ? '' : 'イベント名を入力してください'
+  errors.eventDate = form.eventDate ? '' : `${typeDef.value.dateLabel}を入力してください`
+  errors.name = !typeDef.value.nameRequired || form.name.trim() ? '' : `${typeDef.value.nameLabel}を入力してください`
   errors.time =
     form.startTime && form.endTime && form.endTime <= form.startTime
       ? '終了時間は開始時間より後にしてください'
@@ -97,8 +104,9 @@ const save = async () => {
     const { error: updateError } = await $supabase
       .from('events')
       .update({
+        sale_type: form.saleType,
         event_date: form.eventDate,
-        name: form.name.trim(),
+        name: resolveSaleName(form.saleType, form.name, form.location),
         location: form.location.trim() || null,
         start_time: form.startTime || null,
         end_time: form.endTime || null,
@@ -141,27 +149,34 @@ const save = async () => {
   <main class="page">
     <section class="card">
       <p class="brand">natty note</p>
-      <h1>出店予定を編集</h1>
+      <h1>販売予定を編集</h1>
 
       <p v-if="loading" role="status">読み込み中...</p>
       <p v-if="errorMessage" class="error-box" role="alert">{{ errorMessage }}</p>
 
       <form v-if="found" novalidate @submit.prevent="save">
         <label>
-          出店日
+          販売方法
+          <select v-model="form.saleType">
+            <option v-for="t in SALE_TYPES" :key="t.value" :value="t.value">{{ t.icon }} {{ t.label }}</option>
+          </select>
+        </label>
+
+        <label>
+          {{ typeDef.dateLabel }}
           <input v-model="form.eventDate" type="date" :aria-invalid="!!errors.eventDate">
           <span v-if="errors.eventDate" class="error">{{ errors.eventDate }}</span>
         </label>
 
         <label>
-          イベント名
-          <input v-model="form.name" type="text" placeholder="○○マルシェ" :aria-invalid="!!errors.name">
+          {{ typeDef.nameLabel }}
+          <input v-model="form.name" type="text" :placeholder="typeDef.namePlaceholder" :aria-invalid="!!errors.name">
           <span v-if="errors.name" class="error">{{ errors.name }}</span>
         </label>
 
         <label>
-          場所
-          <input v-model="form.location" type="text" placeholder="○○交流センター">
+          {{ typeDef.locationLabel }}
+          <input v-model="form.location" type="text" :placeholder="typeDef.locationPlaceholder">
         </label>
 
         <div class="time-row">
@@ -184,7 +199,7 @@ const save = async () => {
         <label>
           状態
           <select v-model="form.status">
-            <option v-for="o in EVENT_STATUS_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+            <option v-for="o in statusOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>
         </label>
 

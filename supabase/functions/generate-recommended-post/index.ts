@@ -301,7 +301,7 @@ Deno.serve(async req => {
     if (!product || !product.active) return json({ error: '商品が見つかりません' }, 404)
 
     const [eventsRes, linksRes, salesRes, postsRes, recentRes] = await Promise.all([
-      supabase.from('events').select('id, name, event_date, start_time, location, status'),
+      supabase.from('events').select('id, name, event_date, start_time, location, status, sale_type'),
       supabase.from('event_products').select('event_id, product_id').eq('product_id', productId),
       supabase.from('sales_results').select('event_id, product_id, status').eq('product_id', productId),
       supabase
@@ -401,8 +401,10 @@ Deno.serve(async req => {
     if (!angle) return json({ error: '切り口を決められませんでした。もう一度お試しください。' }, 502)
 
     // ================= 2回目: 文章を書く（切り口に必要な情報だけ渡す）=================
-    const eventForAi = angle === 'event_notice' && nextEvent ? nextEvent : null
-    const lastEventForAi = angle === 'event_thanks' && lastPastEvent ? lastPastEvent : null
+    // イベント情報を渡すのは sale_type='event' のときだけ（直売所・受注・その他の情報は渡さない）
+    const isEventSale = (e: RecEvent | null) => !!e && (e.sale_type ?? 'event') === 'event'
+    const eventForAi = angle === 'event_notice' && isEventSale(nextEvent) ? nextEvent : null
+    const lastEventForAi = angle === 'event_thanks' && isEventSale(lastPastEvent) ? lastPastEvent : null
     const usesEvent = !!(eventForAi || lastEventForAi)
 
     const writingInput: Record<string, unknown> = {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { SALE_TYPES, resolveSaleName, saleTypeDef, type SaleType } from '~/utils/saleTypes'
+
 const { $supabase, $supabaseConfigError } = useNuxtApp()
 
 const step = ref(1)
@@ -8,6 +10,7 @@ const errorMessage = ref('')
 const products = ref<any[]>([])
 
 const form = reactive({
+  saleType: 'event' as SaleType,
   eventDate: '',
   name: '',
   location: '',
@@ -53,6 +56,11 @@ const selectedProducts = computed(() =>
   products.value.filter(p => form.productIds.includes(p.id))
 )
 
+const typeDef = computed(() => saleTypeDef(form.saleType))
+// イベント出店は名前が必須。それ以外は空なら自動で名前を付ける
+const canLeaveStep2 = computed(() => !typeDef.value.nameRequired || !!form.name.trim())
+const resolvedName = computed(() => resolveSaleName(form.saleType, form.name, form.location))
+
 const nextStep = () => {
   if (step.value < 4) step.value++
 }
@@ -70,9 +78,10 @@ const saveEvent = async () => {
     const { data: event, error: eventError } = await $supabase
       .from('events')
       .insert({
+        sale_type: form.saleType,
         event_date: form.eventDate,
-        name: form.name,
-        location: form.location || null,
+        name: resolvedName.value,
+        location: form.location.trim() || null,
         start_time: form.startTime || null,
         end_time: form.endTime || null
       })
@@ -111,10 +120,23 @@ const saveEvent = async () => {
       <p class="step">STEP {{ step }} / 4</p>
 
       <div v-if="step === 1">
-        <h1>いつ出店しますか？</h1>
+        <h1>どの方法で販売しますか？</h1>
+
+        <div class="sale-types" role="radiogroup" aria-label="販売方法">
+          <label
+            v-for="t in SALE_TYPES"
+            :key="t.value"
+            class="sale-type"
+            :class="{ selected: form.saleType === t.value }"
+          >
+            <input v-model="form.saleType" type="radio" name="sale-type" :value="t.value">
+            <span class="sale-icon" aria-hidden="true">{{ t.icon }}</span>
+            <span>{{ t.label }}</span>
+          </label>
+        </div>
 
         <label>
-          出店日
+          {{ typeDef.dateLabel }}
           <input v-model="form.eventDate" type="date">
         </label>
 
@@ -127,23 +149,23 @@ const saveEvent = async () => {
       </div>
 
       <div v-else-if="step === 2">
-        <h1>どこで販売しますか？</h1>
+        <h1>{{ typeDef.stepTitle }}</h1>
 
         <label>
-          イベント名
+          {{ typeDef.nameLabel }}
           <input
             v-model="form.name"
             type="text"
-            placeholder="○○マルシェ"
+            :placeholder="typeDef.namePlaceholder"
           >
         </label>
 
         <label>
-          場所
+          {{ typeDef.locationLabel }}
           <input
             v-model="form.location"
             type="text"
-            placeholder="○○交流センター"
+            :placeholder="typeDef.locationPlaceholder"
           >
         </label>
 
@@ -165,7 +187,7 @@ const saveEvent = async () => {
           </button>
 
           <button
-            :disabled="!form.name"
+            :disabled="!canLeaveStep2"
             @click="nextStep"
           >
             次へ
@@ -238,13 +260,16 @@ const saveEvent = async () => {
         <h1>内容を確認してください</h1>
 
         <dl>
-          <dt>出店日</dt>
+          <dt>販売方法</dt>
+          <dd>{{ typeDef.label }}</dd>
+
+          <dt>{{ typeDef.dateLabel }}</dt>
           <dd>{{ form.eventDate }}</dd>
 
-          <dt>イベント</dt>
-          <dd>{{ form.name }}</dd>
+          <dt>名前</dt>
+          <dd>{{ resolvedName }}</dd>
 
-          <dt>場所</dt>
+          <dt>{{ typeDef.locationLabel }}</dt>
           <dd>{{ form.location || '未入力' }}</dd>
 
           <dt>時間</dt>
@@ -403,6 +428,49 @@ dt {
 dd {
   margin: 4px 0 0;
   font-weight: 600;
+}
+
+.sale-types {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.sale-type {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 88px;
+  margin: 0;
+  padding: 12px 8px;
+  border: 2px solid #dbe3dc;
+  border-radius: 14px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.sale-type.selected {
+  border-color: #31694f;
+  background: #f1f7f3;
+}
+
+.sale-type input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sale-type input:focus-visible + .sale-icon {
+  outline: 3px solid #91b8a1;
+  outline-offset: 2px;
+}
+
+.sale-icon {
+  font-size: 26px;
 }
 
 .back-home {
